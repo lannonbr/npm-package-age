@@ -81,7 +81,7 @@ fn generate_urls(lockfile: Value) -> Vec<String> {
             .keys()
             .map(|key| key.to_owned())
             .filter(|key| key.len() > 0)
-            .map(|key| key.split_once("node_modules/").unwrap().1.to_owned())
+            .map(|key| key.rsplit_once("node_modules/").unwrap().1.to_owned())
             .collect();
 
         let urls: Vec<String> = deps_keys
