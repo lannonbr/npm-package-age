@@ -1,4 +1,4 @@
-use std::{env, fs};
+use std::{env, fs, path};
 
 use chrono::{DateTime, TimeZone, Utc};
 use futures::{stream::FuturesUnordered, StreamExt};
@@ -8,20 +8,20 @@ use serde_json::Value;
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<String> = env::args().collect();
 
-    let lockfile_str = fs::read_to_string(&args[1]).unwrap();
-
-    let lockfile: Value = serde_json::from_str(&lockfile_str).unwrap();
-
-    let urls = generate_urls(lockfile);
-
     let client = reqwest::Client::builder()
         .user_agent("npm-package-age/0.1.0 (+https://github.com/lannonbr/npm-package-age)")
         .build()
         .unwrap();
 
+    let input = &args[1];
+
+    let lockfile = fetch_lockfile(input, &client).await;
+
+    let urls = generate_urls(lockfile);
+
     let mut requests = FuturesUnordered::new();
 
-    let mut packages: Vec<Package> = vec![];
+    let mut packages: Vec<Package> = Vec::new();
 
     for req in urls {
         let client = client.clone();
@@ -55,6 +55,28 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     parse_packages(&packages);
 
     Ok(())
+}
+
+async fn fetch_lockfile(input: &String, client: &reqwest::Client) -> Value {
+    let lockfile: Value = if input.starts_with("http") && input.ends_with("package-lock.json") {
+        let lockfile_str = client
+            .get(input)
+            .send()
+            .await
+            .unwrap()
+            .text()
+            .await
+            .unwrap();
+        serde_json::from_str(&lockfile_str)
+            .unwrap_or_else(|err| panic!("Error parsing url result {}", err))
+    } else if path::Path::new(input).exists() {
+        let lockfile_str = fs::read_to_string(input).unwrap();
+        serde_json::from_str(&lockfile_str)
+            .unwrap_or_else(|err| panic!("Error parsing file {}", err))
+    } else {
+        panic!("Not a URL or path to a pacakge-lock.json file");
+    };
+    lockfile
 }
 
 fn generate_urls(lockfile: Value) -> Vec<String> {
