@@ -52,7 +52,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         packages.push(Package { name, publishes });
     }
 
-    parse_packages(&packages);
+    parse_packages(packages);
 
     Ok(())
 }
@@ -125,33 +125,47 @@ fn get_publishes(entry: Value) -> serde_json::Map<String, Value> {
     publishes.to_owned()
 }
 
-fn parse_packages(packages: &Vec<Package>) {
-    for pkg in packages {
-        let publishes_arr: Vec<(&String, i64)> = pkg
-            .publishes
-            .iter()
-            .map(|(k, v)| {
-                (
-                    k,
-                    v.as_str()
-                        .unwrap()
-                        .parse::<DateTime<Utc>>()
-                        .unwrap()
-                        .timestamp_millis(),
-                )
-            })
-            .filter(|(k, _)| k.clone() != "created" || k.clone() != "modified")
-            .collect();
+fn parse_packages(packages: Vec<Package>) {
+    let pkg_clone = packages.clone();
+    let mut sorted: Vec<(String, &String, i64)> = pkg_clone
+        .iter()
+        .map(|pkg| {
+            let publishes_arr: Vec<(&String, i64)> = pkg
+                .publishes
+                .iter()
+                .map(|(k, v)| (k, timestamp_millis(v)))
+                .filter(|(k, _)| k.clone() != "created" && k.clone() != "modified")
+                .collect();
 
-        let max = publishes_arr.iter().max_by(|a, b| a.1.cmp(&b.1)).unwrap();
+            let max = publishes_arr
+                .iter()
+                .max_by(|(_, a), (_, b)| a.cmp(&b))
+                .unwrap();
+            (pkg.name.clone(), max.0, max.1)
+        })
+        .collect();
+
+    sorted.sort_by(|(_, _, a), (_, _, b)| a.cmp(&b));
+
+    for (pkg_name, version, timestamp) in sorted {
         println!(
-            "Latest publish for {}: {}",
-            pkg.name,
-            Utc.timestamp_millis(max.1).format("%+")
+            "{} {} {}",
+            pkg_name,
+            version,
+            Utc.timestamp_millis(timestamp).format("%+")
         );
     }
 }
 
+fn timestamp_millis(v: &Value) -> i64 {
+    v.as_str()
+        .unwrap()
+        .parse::<DateTime<Utc>>()
+        .unwrap()
+        .timestamp_millis()
+}
+
+#[derive(Clone)]
 struct Package {
     name: String,
     publishes: serde_json::Map<String, Value>,
