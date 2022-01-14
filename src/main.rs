@@ -57,7 +57,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-async fn fetch_lockfile(input: &String, client: &reqwest::Client) -> Value {
+async fn fetch_lockfile(input: &str, client: &reqwest::Client) -> Value {
     let lockfile: Value = if input.starts_with("http") && input.ends_with("package-lock.json") {
         let lockfile_str = client
             .get(input)
@@ -102,7 +102,7 @@ fn generate_urls(lockfile: Value) -> Vec<String> {
         let deps_keys: HashSet<String> = deps
             .keys()
             .map(|key| key.to_owned())
-            .filter(|key| key.len() > 0)
+            .filter(|key| !key.is_empty())
             .map(|key| key.rsplit_once("node_modules/").unwrap().1.to_owned())
             .collect();
 
@@ -126,26 +126,25 @@ fn get_publishes(entry: Value) -> serde_json::Map<String, Value> {
 }
 
 fn parse_packages(packages: Vec<Package>) {
-    let pkg_clone = packages.clone();
-    let mut sorted: Vec<(String, &String, i64)> = pkg_clone
+    let mut sorted: Vec<(String, &String, i64)> = packages
         .iter()
         .map(|pkg| {
             let publishes_arr: Vec<(&String, i64)> = pkg
                 .publishes
                 .iter()
                 .map(|(k, v)| (k, timestamp_millis(v)))
-                .filter(|(k, _)| k.clone() != "created" && k.clone() != "modified")
+                .filter(|(k, _)| k.as_str() != "created" && k.as_str() != "modified")
                 .collect();
 
             let max = publishes_arr
                 .iter()
-                .max_by(|(_, a), (_, b)| a.cmp(&b))
+                .max_by(|(_, a), (_, b)| a.cmp(b))
                 .unwrap();
             (pkg.name.clone(), max.0, max.1)
         })
         .collect();
 
-    sorted.sort_by(|(_, _, a), (_, _, b)| a.cmp(&b));
+    sorted.sort_by(|(_, _, a), (_, _, b)| a.cmp(b));
 
     for (pkg_name, version, timestamp) in sorted {
         println!(
