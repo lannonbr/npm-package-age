@@ -1,4 +1,4 @@
-use std::{env, fs, path};
+use std::{collections::HashSet, env, fs, path};
 
 use chrono::{DateTime, TimeZone, Utc};
 use futures::{stream::FuturesUnordered, StreamExt};
@@ -99,7 +99,7 @@ fn generate_urls(lockfile: Value) -> Vec<String> {
     } else if lockfile_version == 2 {
         let deps = &lockfile["packages"].as_object().unwrap();
 
-        let deps_keys: Vec<String> = deps
+        let deps_keys: HashSet<String> = deps
             .keys()
             .map(|key| key.to_owned())
             .filter(|key| key.len() > 0)
