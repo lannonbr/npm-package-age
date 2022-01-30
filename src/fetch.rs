@@ -2,9 +2,9 @@ use futures::{stream::FuturesUnordered, StreamExt};
 use serde_json::Value;
 use std::{collections::HashSet, fs, path};
 
-use crate::package::Package;
+use crate::structs::Package;
 
-pub async fn fetch_lockfile(input: &str, client: &reqwest::Client) -> Value {
+pub async fn fetch_lockfile(input: String, client: &reqwest::Client) -> Value {
     let lockfile: Value = if input.starts_with("http") && input.ends_with("package-lock.json") {
         let lockfile_str = client
             .get(input)
@@ -16,7 +16,7 @@ pub async fn fetch_lockfile(input: &str, client: &reqwest::Client) -> Value {
             .unwrap();
         serde_json::from_str(&lockfile_str)
             .unwrap_or_else(|err| panic!("Error parsing url result {}", err))
-    } else if path::Path::new(input).exists() {
+    } else if path::Path::new(&input).exists() {
         let lockfile_str = fs::read_to_string(input).unwrap();
         serde_json::from_str(&lockfile_str)
             .unwrap_or_else(|err| panic!("Error parsing file {}", err))

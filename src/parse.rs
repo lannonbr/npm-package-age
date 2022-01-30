@@ -1,34 +1,62 @@
-use crate::package::Package;
-use chrono::{DateTime, TimeZone, Utc};
+use std::io;
 
-pub fn parse_packages(packages: Vec<Package>) {
-    let mut sorted: Vec<(String, &String, i64)> = packages
+use crate::{
+    structs::{Output, Package},
+    Opt,
+};
+use chrono::{DateTime, Utc};
+use serde::Serialize;
+
+#[derive(Serialize)]
+struct ParsedPackage {
+    name: String,
+    max_version: String,
+    timestamp: i64,
+}
+
+pub fn parse_packages(packages: Vec<Package>, args: Opt) {
+    let mut sorted: Vec<ParsedPackage> = packages
         .iter()
         .map(|pkg| {
             let publishes_arr: Vec<(&String, i64)> = pkg
                 .publishes
                 .iter()
                 .map(|(k, v)| (k, timestamp_millis(v)))
-                .filter(|(k, _)| k.as_str() != "created" && k.as_str() != "modified")
+                .filter(|(k, _)| {
+                    k.as_str() != "created" && k.as_str() != "modified" && k.as_str() != "0.0.0"
+                })
                 .collect();
 
             let max = publishes_arr
                 .iter()
                 .max_by(|(_, a), (_, b)| a.cmp(b))
                 .unwrap();
-            (pkg.name.clone(), max.0, max.1)
+            ParsedPackage {
+                name: pkg.name.clone(),
+                max_version: max.0.to_owned(),
+                timestamp: max.1,
+            }
         })
         .collect();
 
-    sorted.sort_by(|(_, _, a), (_, _, b)| a.cmp(b));
+    if args.reverse {
+        sorted.sort_by(|a, b| b.timestamp.cmp(&a.timestamp));
+    } else {
+        sorted.sort_by(|a, b| a.timestamp.cmp(&b.timestamp));
+    }
 
-    for (pkg_name, version, timestamp) in sorted {
-        println!(
-            "{} {} {}",
-            pkg_name,
-            version,
-            Utc.timestamp_millis(timestamp).format("%+")
-        );
+    match args.format {
+        Output::CSV => {
+            let mut wtr = csv::Writer::from_writer(io::stdout());
+            for p in sorted {
+                wtr.serialize(p).unwrap();
+            }
+            wtr.flush().unwrap();
+        }
+        Output::JSON => {
+            let out = serde_json::to_string_pretty(&sorted).unwrap();
+            println!("{out}");
+        }
     }
 }
 
